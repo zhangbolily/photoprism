@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,6 +13,7 @@ import (
 )
 
 var photoYamlMutex = sync.Mutex{}
+var photoYamlLockMap = make(map[string]bool, 0)
 
 // Yaml returns photo data as YAML string.
 func (m *Photo) Yaml() ([]byte, error) {
@@ -43,8 +45,21 @@ func (m *Photo) SaveAsYaml(fileName string) error {
 		return err
 	}
 
+	if _, ok := photoYamlLockMap[m.PhotoUID]; ok {
+		return errors.New("photo: already locked")
+	}
+
 	photoYamlMutex.Lock()
-	defer photoYamlMutex.Unlock()
+	// Lock photo to prevent concurrent writes.
+	photoYamlLockMap[m.PhotoUID] = true
+	photoYamlMutex.Unlock()
+
+	defer func() {
+		photoYamlMutex.Lock()
+		// Unlock photo.
+		delete(photoYamlLockMap, m.PhotoUID)
+		photoYamlMutex.Unlock()
+	}()
 
 	// Write YAML data to file.
 	if err := os.WriteFile(fileName, data, fs.ModeFile); err != nil {

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
@@ -152,6 +153,7 @@ func BatchPhotosRestore(router *gin.RouterGroup) {
 func BatchPhotosApprove(router *gin.RouterGroup) {
 	router.POST("batch/photos/approve", func(c *gin.Context) {
 		s := Auth(c, acl.ResourcePhotos, acl.ActionUpdate)
+		conf := get.Config()
 
 		if s.Abort(c) {
 			return
@@ -179,14 +181,23 @@ func BatchPhotosApprove(router *gin.RouterGroup) {
 			return
 		}
 
+		jobs := make(chan ApproveJob, len(photos))
 		var approved entity.Photos
 
+		var wg sync.WaitGroup
+		var numWorkers = conf.Workers()
+		wg.Add(numWorkers)
+		for i := 0; i < numWorkers; i++ {
+			go func() {
+				result := ApproveWorker(jobs) // HLc
+				approved = append(approved, result.Photos...)
+				wg.Done()
+			}()
+		}
+
 		for _, p := range photos {
-			if err = p.Approve(); err != nil {
-				log.Errorf("approve: %s", err)
-			} else {
-				approved = append(approved, p)
-				SavePhotoAsYaml(p)
+			jobs <- ApproveJob{
+				Photo: p,
 			}
 		}
 
