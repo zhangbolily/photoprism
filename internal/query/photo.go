@@ -231,3 +231,15 @@ func FlagHiddenPhotos() (err error) {
 
 	return nil
 }
+
+// ReviewPhotos returns a Photo based on the ID.
+func ReviewPhotos(limit int, offset int) (entities entity.Photos, err error) {
+	err = UnscopedDb().
+		Select("photos.*").
+		Where("photos.photo_quality < 3").
+		Where("photos.deleted_at IS NULL").
+		Order("photos.id").
+		Offset(offset).Find(&entities).Error
+
+	return entities, err
+}

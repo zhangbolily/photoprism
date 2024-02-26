@@ -173,6 +173,7 @@ func BatchPhotosApprove(router *gin.RouterGroup) {
 
 		log.Infof("photos: approving %s", clean.Log(f.String()))
 
+		queryStart := time.Now()
 		// Fetch selection from index.
 		photos, err := query.SelectedPhotos(f)
 
@@ -180,12 +181,18 @@ func BatchPhotosApprove(router *gin.RouterGroup) {
 			AbortEntityNotFound(c)
 			return
 		}
+		log.Infof("photos: query selected photos cost [%s]", time.Since(queryStart))
 
 		jobs := make(chan ApproveJob, len(photos))
 		var approved entity.Photos
 
 		var wg sync.WaitGroup
-		var numWorkers = conf.Workers()
+		var numWorkers = len(photos)
+		if len(photos) > conf.Workers() {
+			numWorkers = conf.Workers()
+		}
+
+		log.Infof("photos: starting %d workers to approve", numWorkers)
 		wg.Add(numWorkers)
 		for i := 0; i < numWorkers; i++ {
 			go func() {
@@ -199,6 +206,14 @@ func BatchPhotosApprove(router *gin.RouterGroup) {
 			jobs <- ApproveJob{
 				Photo: p,
 			}
+		}
+
+		close(jobs)
+		wg.Wait()
+
+		// Update precalculated photo and file counts.
+		if err := entity.UpdateCounts(); err != nil {
+			log.Warnf("index: %s (update counts)", err)
 		}
 
 		UpdateClientConfig()

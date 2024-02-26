@@ -894,11 +894,6 @@ func (m *Photo) Approve() error {
 		return err
 	}
 
-	// Update precalculated photo and file counts.
-	if err := UpdateCounts(); err != nil {
-		log.Warnf("index: %s (update counts)", err)
-	}
-
 	event.Publish("count.review", event.Data{
 		"count": -1,
 	})

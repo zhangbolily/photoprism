@@ -219,6 +219,11 @@ func ApprovePhoto(router *gin.RouterGroup) {
 			return
 		}
 
+		// Update precalculated photo and file counts.
+		if err := entity.UpdateCounts(); err != nil {
+			log.Warnf("index: %s (update counts)", err)
+		}
+
 		SavePhotoAsYaml(m)
 
 		PublishPhotoEvent(EntityUpdated, id, c)

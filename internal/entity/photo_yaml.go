@@ -45,11 +45,13 @@ func (m *Photo) SaveAsYaml(fileName string) error {
 		return err
 	}
 
+	photoYamlMutex.Lock()
 	if _, ok := photoYamlLockMap[m.PhotoUID]; ok {
+		photoYamlMutex.Unlock()
+		log.Errorf("photo: %s already locked", m.PhotoUID)
 		return errors.New("photo: already locked")
 	}
 
-	photoYamlMutex.Lock()
 	// Lock photo to prevent concurrent writes.
 	photoYamlLockMap[m.PhotoUID] = true
 	photoYamlMutex.Unlock()
